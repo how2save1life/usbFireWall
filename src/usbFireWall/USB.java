@@ -1,6 +1,8 @@
 package usbFireWall;
 
+import javax.swing.*;
 import javax.swing.filechooser.FileSystemView;
+import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -11,8 +13,10 @@ import java.util.HashSet;
 public class USB extends Thread {
     //保存所有盘符
     File[] files = File.listRoots();
-    //String virus = "";
-    File autorun = null;
+    boolean addDisk = false;//是否有新盘
+    File theNewDisk = null;
+    File theOutDisk = null;
+    String infPath;
     HashSet<String> viruses = new HashSet<String>();
 
     public void run() {
@@ -46,13 +50,19 @@ public class USB extends Thread {
         //有新加入的盘
         if (files.length < currentFiles.length) {
             theFile = getTheFile(currentFiles, files);
+            theNewDisk=theFile;
             files = currentFiles;
+            addDisk = true;
+            safeOpen(theFile.getAbsolutePath());//安全打开
             System.out.println("新加盘：" + theFile.getAbsolutePath() + sys.getSystemDisplayName(theFile));
         }
         //减少盘
         else if (files.length > currentFiles.length) {
             theFile = getTheFile(files, currentFiles);
+            theNewDisk=null;
+            theOutDisk=theFile;
             files = currentFiles;
+            addDisk = false;
             System.out.println("删除盘：" + theFile.getAbsolutePath());
         }
 
@@ -77,23 +87,26 @@ public class USB extends Thread {
     }
 
     //某盘根目录扫描
-    void checkDiskDir(String disk) {
+    int checkDiskDir(String disk) {
         File dir = new File(disk);
         File[] files = dir.listFiles();
-        if (files == null)
-            return;
-        for (File file : files) {
-            if (!file.isDirectory()) {
-                String strFileName = file.getAbsolutePath();
-                System.out.println("---" + strFileName + "?");
-                if (file.getName().toLowerCase().equals("autorun.inf")) {
-                    System.out.println(file.getAbsolutePath());
-                    //openAsTXT(file.getAbsolutePath());
-                    autorun = file;
-                    scanAutoRun(file.getAbsolutePath());
+        if (files != null) {
+            for (File file : files) {
+                if (!file.isDirectory()) {
+                    String strFileName = file.getAbsolutePath();
+                    System.out.println("---" + strFileName + "?");
+                    if (file.getName().toLowerCase().equals("autorun.inf")) {
+                        System.out.println(file.getAbsolutePath());
+                        infPath = file.getAbsolutePath();
+                        //openAsTXT(file.getAbsolutePath());
+                        //autorun = file;
+                        return scanAutoRun(file.getAbsolutePath());
+                    }
                 }
             }
         }
+
+        return 0;
     }
 
 
@@ -130,17 +143,25 @@ public class USB extends Thread {
     }
 
     //以txt打开
-    void openAsTXT(String path) {
+    boolean openAsTXT(String path) {
+        File f=new File(path);
+        if(!f.exists()){
+            return false;
+        }
         try {
             Runtime.getRuntime().exec("cmd.exe  /c notepad " + path);
+            return true;
         } catch (Exception e) {
             System.out.println("打开" + path + "失败！");
             e.printStackTrace();
         }
+        return false;
     }
 
     //扫描文件
     int scanAutoRun(String path) {
+        viruses.clear();//清空上一次存入的
+        String diskpath=path.substring(0,3).toLowerCase();
         File file = new File(path);
         //保存一个一个字节读
         byte[] infbytes = new byte[1];
@@ -172,11 +193,19 @@ public class USB extends Thread {
                 //open
                 keyword = inf.substring(index - "open".length(), index);
                 if (keyword.equals("open")) {
-                    for (int i = 1; index + i < inf.length() && inf.charAt(index + i) != '\r' && inf.charAt(index + i) != '\n'; i++) {
+                    for (int i = 1;
+                         index + i < inf.length() && inf.charAt(index + i) != '\r' && inf.charAt(index + i) != '\n';
+                         i++) {
                         virus += inf.charAt(index + i);
                     }
-                    if (virus.contains(".bat") || virus.contains(".exe") || virus.contains(".com") || virus.contains(".vbs"))
+                    if (virus.contains(".bat") || virus.contains(".exe")
+                            || virus.contains(".com") || virus.contains(".vbs")) {
+                        if (!virus.contains(":\\")) {
+                            virus = diskpath + virus;
+                        }
                         viruses.add(virus);
+                    }
+
                     //System.out.println(virus);
                     virus = "";
                 }
@@ -187,8 +216,12 @@ public class USB extends Thread {
                     for (int i = 1; index + i < inf.length() && inf.charAt(index + i) != '\r' && inf.charAt(index + i) != '\n'; i++) {
                         virus += inf.charAt(index + i);
                     }
-                    if (virus.contains(".bat") || virus.contains(".exe") || virus.contains(".com") || virus.contains(".vbs"))
+                    if (virus.contains(".bat") || virus.contains(".exe") || virus.contains(".com") || virus.contains(".vbs")) {
+                        if (!virus.contains(":\\")) {
+                            virus = diskpath + virus;
+                        }
                         viruses.add(virus);
+                    }
                     //System.out.println("shell" + virus);
                     virus = "";
                 }
@@ -199,8 +232,12 @@ public class USB extends Thread {
                     for (int i = 1; index + i < inf.length() && inf.charAt(index + i) != '\r' && inf.charAt(index + i) != '\n'; i++) {
                         virus += inf.charAt(index + i);
                     }
-                    if (virus.contains(".bat") || virus.contains(".exe") || virus.contains(".com") || virus.contains(".vbs"))
+                    if (virus.contains(".bat") || virus.contains(".exe") || virus.contains(".com") || virus.contains(".vbs")) {
+                        if (!virus.contains(":\\")) {
+                            virus = diskpath + virus;
+                        }
                         viruses.add(virus);
+                    }
                     //System.out.println("command" + virus);
                     virus = "";
 
@@ -210,6 +247,7 @@ public class USB extends Thread {
             System.out.println(inf);
             //有风险
             if (!viruses.isEmpty()) {
+                Toolkit.getDefaultToolkit().beep();
                 return 1;
             }
 
@@ -222,8 +260,24 @@ public class USB extends Thread {
         return 0;
     }
 
-    void deleteAutoRun(String path) {
+    //删除文件
+    boolean deleteFile(String path) {
+        File file = new File(path);
+        if (!file.exists()) {
+            System.out.println("删除文件失败:" + file.getAbsolutePath() + "不存在！");
+            return false;
+        } else {
+            if (file.isFile())
+                return file.delete();
+        }
+        return false;
+    }
 
+    public void changeStart(boolean isStartAtLogon) throws IOException{
+        String regKey = "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+        String myAppName = "usbFireWall";
+        String exePath = System.getProperty("user.dir")+"\\usbFireWall.exe";
+        Runtime.getRuntime().exec("reg "+(isStartAtLogon?"add ":"delete ")+regKey+" /v "+myAppName+(isStartAtLogon?" /t reg_sz /d "+exePath:" /f"));
     }
 
 }

@@ -215,7 +215,7 @@ public class UI extends JFrame implements Runnable {
         textField.setColumns(10);
 
         //
-        JLabel lblNewLabel_1 = new JLabel("161310225  张海路 && 161310221  张春麟");
+        JLabel lblNewLabel_1 = new JLabel("161310225  张## && 161310221  张##");
         lblNewLabel_1.setBounds(28, 225, 495, 35);
         contentPane.add(lblNewLabel_1);
 
